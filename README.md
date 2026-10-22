@@ -1,6 +1,7 @@
 # Servo Lab – ESP32 drone edition
 
 An interactive, no-build web app that explains how servos work on an ESP32 drone. Open `index.html` in a browser.
+<img width="1850" height="1026" alt="image" src="https://github.com/user-attachments/assets/4a241a23-e675-40b9-ab29-f73b5f33e213" />
 
 ## Stations
 1. **The signal** – 50 Hz PWM: pulse width → angle, live waveform, duty-cycle and ESP32 LEDC maths, switchable pulse ranges.
