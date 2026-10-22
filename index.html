@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Servo Lab – ESP32 Drone</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>🚁 Servo Lab <small>ESP32 drone edition</small></h1>
+  <p>Nine hands-on stations: from a 1.5 ms pulse to a drone that levels itself.</p>
+</header>
+
+<nav id="tabs" aria-label="Stations">
+  <button data-tab="pwm">1 · The signal</button>
+  <button data-tab="inside">2 · Inside a servo</button>
+  <button data-tab="fly">3 · Fly the drone</button>
+  <button data-tab="gimbal">4 · Camera gimbal</button>
+  <button data-tab="wiring">5 · Wiring</button>
+  <button data-tab="quad">6 · Quadcopter &amp; ESC</button>
+  <button data-tab="jobs">7 · More servo jobs</button>
+  <button data-tab="picker">8 · Pick a servo</button>
+  <button data-tab="quiz">9 · Quiz &amp; glossary</button>
+</nav>
+
+<section id="missions" aria-label="Missions">
+  <div class="mhead">
+    <b id="mTitle">Missions</b>
+    <span id="mStars" class="stars"></span>
+    <span class="spacer"></span>
+    <button id="mPredictBtn" class="small">🔮 Predict first</button>
+    <button id="mMode" class="small toggle on" title="Guided: finish a station's first mission to unlock the next">🧭 Guided</button>
+  </div>
+  <ul id="mList"></ul>
+  <div id="predictBox" hidden></div>
+</section>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<main>
+<!-- 1 · PWM -->
+<section id="tab-pwm" class="tab" hidden>
+  <h2>How does a servo know where to point?</h2>
+  <p class="lead">The ESP32 sends a tiny pulse <b>50 times every second</b>. The <b>length</b> of each pulse is the message: short = turn one way, long = turn the other way.</p>
+  <div class="two">
+    <div class="card center">
+      <div id="pwmServo"></div>
+      <label class="slider">Angle <input id="pwmAngle" type="range" min="0" max="180" step="1" value="90"><output id="pwmAngleOut"></output></label>
+      <div class="row">
+        <button data-a="0">0°</button><button data-a="90">90°</button><button data-a="180">180°</button>
+        <button id="pwmSweep" class="toggle">↔ Sweep</button>
+      </div>
+      <label class="slider">Servo type
+        <select id="pwmRange">
+          <option value="500,2500">500–2500 µs (ESP32Servo default)</option>
+          <option value="1000,2000">1000–2000 µs (typical hobby servo)</option>
+        </select>
+      </label>
+    </div>
+    <div class="card">
+      <canvas id="pwmCanvas" width="640" height="270"></canvas>
+      <div id="pwmMath" class="math"></div>
+    </div>
+  </div>
+  <p class="try">🎯 <b>Try this:</b> drag the slider and watch only the <i>width</i> of the high pulse change, while the 20 ms period stays the same. Then switch servo type: the same angle needs a different pulse!</p>
+</section>
+
+<!-- 2 · Inside -->
+<section id="tab-inside" class="tab" hidden>
+  <h2>What is inside a servo?</h2>
+  <p class="lead">A servo is a <b>motor + gears + a position sensor + a tiny brain</b>. The brain keeps comparing where the horn <i>is</i> to where you <i>asked</i> it to be, and pushes the motor until the error is zero.</p>
+  <div class="card">
+    <canvas id="inCanvas" width="640" height="340"></canvas>
+    <div class="grid3">
+      <label class="slider">Target angle <input id="inTarget" type="range" min="0" max="180" value="90"><output id="inTargetOut"></output></label>
+      <label class="slider">Stiffness (Kp) <input id="inKp" type="range" min="0.3" max="12" step="0.1" value="1.5"><output id="inKpOut"></output></label>
+      <label class="slider">Push on horn <input id="inPush" type="range" min="-300" max="300" step="10" value="0"><output id="inPushOut"></output></label>
+    </div>
+    <div class="row">
+      <button data-t="30">Target 30°</button><button data-t="90">90°</button><button data-t="150">150°</button>
+      <button id="inSweep" class="toggle">↔ Sweep</button>
+    </div>
+  </div>
+  <p class="try">🎯 <b>Try this:</b> <b>grab the white horn</b> and drag it away, then let go: it fights back! Next, crank Kp up to 12 and watch it overshoot and wobble. Turn Kp down and it gets lazy. Real servo makers tune this balance.</p>
+</section>
+
+<!-- 3 · Fly -->
+<section id="tab-fly" class="tab" hidden>
+  <h2>Fly the ESP32 drone with servos</h2>
+  <p class="lead">On a fixed-wing drone, servos tilt <b>control surfaces</b>. Move the stick and see which servos turn, by how much, and how the plane responds.</p>
+  <div class="two">
+    <div class="card">
+      <svg id="flyPlane" viewBox="0 0 420 310" aria-label="Top view of the drone"></svg>
+      <div class="legend"><span class="sw down"></span> trailing edge DOWN &nbsp; <span class="sw up"></span> UP &nbsp; <span class="sw zero"></span> centred</div>
+      <div id="flyServos" class="servocards"></div>
+    </div>
+    <div class="card center">
+      <canvas id="flyHorizon" width="220" height="220"></canvas>
+      <div id="flyReadout" class="readout"></div>
+      <div class="stickrow">
+        <div id="stick" aria-label="Control stick"><div id="knob"></div></div>
+        <div>
+          <label class="slider vert">Rudder (yaw) <input id="flyYaw" type="range" min="-1" max="1" step="0.05" value="0"></label>
+          <p class="hint">Keys: ← → roll, ↑ ↓ pitch, Q E yaw</p>
+        </div>
+      </div>
+      <div class="row">
+        <button id="flyWing" class="toggle">Flying-wing mix</button>
+        <button id="flyAuto" class="toggle">Auto-level</button>
+        <button id="flyGust">🌬️ Gust</button>
+      </div>
+    </div>
+  </div>
+  <div class="card" id="tuneCard">
+    <h3>🎛️ Tune the auto-level (roll)</h3>
+    <p class="hint">Press <b>Run step test</b>: the plane is tipped 30° and the ESP32 must level it. The chart shows what it does. Change the numbers and test again.</p>
+    <div class="two">
+      <div>
+        <label class="slider">Kp (push) <input id="tnKp" type="range" min="0" max="0.3" step="0.005" value="0.035"><output id="tnKpOut"></output></label>
+        <label class="slider">Kd (damping) <input id="tnKd" type="range" min="0" max="0.05" step="0.001" value="0.008"><output id="tnKdOut"></output></label>
+        <label class="slider">Servo speed <input id="tnSpeed" type="range" min="60" max="600" step="10" value="380"><output id="tnSpeedOut"></output></label>
+        <label class="slider">Sensor noise <input id="tnNoise" type="range" min="0" max="8" step="0.5" value="0"><output id="tnNoiseOut"></output></label>
+        <div class="row"><button id="tnRun">▶ Run step test</button><button id="tnReset" class="toggle">Defaults</button></div>
+        <div id="tnVerdict" class="real">No test yet.</div>
+      </div>
+      <div><canvas id="tnChart" width="640" height="300"></canvas></div>
+    </div>
+  </div>
+  <p class="try">🎯 <b>Try this:</b> push the stick right and see the two <b>ailerons move in opposite directions</b>. Hit <b>Gust</b> to knock the plane over, then switch on <b>Auto-level</b>: the ESP32 reads its tilt sensor and commands the servos to level the plane. Finally try <b>Flying-wing mix</b>: two servos now do both jobs, so the code must <i>mix</i> pitch and roll.</p>
+</section>
+
+<!-- 4 · Gimbal -->
+<section id="tab-gimbal" class="tab" hidden>
+  <h2>A servo that keeps the camera level</h2>
+  <p class="lead">When a drone tilts, a gimbal servo turns the <b>opposite</b> way so the camera keeps looking at the horizon. The ESP32 reads the tilt (IMU) and sets the servo angle.</p>
+  <div class="two">
+    <div class="card">
+      <svg id="gmDrone" viewBox="0 0 420 270"></svg>
+    </div>
+    <div class="card center">
+      <div class="camview">
+        <svg id="gmCam" viewBox="0 0 160 120"></svg>
+        <small>What the camera sees</small>
+      </div>
+      <div id="gmReadout" class="readout"></div>
+      <label class="slider">Drone tilt <input id="gmTilt" type="range" min="-80" max="80" step="1" value="0"><output id="gmTiltOut"></output></label>
+      <label class="slider">Servo speed <input id="gmSpeed" type="range" min="40" max="600" step="10" value="300"><output id="gmSpeedOut"></output></label>
+      <div class="row">
+        <button id="gmStab" class="toggle on">Stabilise ON</button>
+        <button id="gmWobble" class="toggle">🌪️ Turbulence</button>
+      </div>
+    </div>
+  </div>
+  <p class="try">🎯 <b>Try this:</b> start <b>Turbulence</b>, then turn stabilise on and off. Slow the servo down and the picture lags behind. Tilt past 90° and the servo runs out of range, so no gimbal can do the impossible.</p>
+</section>
+
+<!-- 5 · Wiring -->
+<section id="tab-wiring" class="tab" hidden>
+  <h2>Wire it up without frying anything</h2>
+  <p class="lead">Servos draw big bursts of current when they move. Pick how to power them, press <b>Move all servos</b> and see what happens. Click a wire to learn what it does.</p>
+  <div class="card">
+    <svg id="wrSvg" viewBox="0 0 640 380"></svg>
+    <div class="row" id="wrModes">
+      <button data-m="3v3">Servos on ESP32 3V3</button>
+      <button data-m="vin">Servos on ESP32 VIN/USB 5V</button>
+      <button data-m="bec" class="on">Separate 5 V BEC + common GND</button>
+      <button data-m="nogd">BEC but NO common GND</button>
+    </div>
+    <div class="row"><button id="wrMove" class="toggle on">▶ Move all servos</button></div>
+    <div id="wrStatus" class="status"></div>
+    <div id="wrWire" class="real">Tap any wire in the diagram.</div>
+  </div>
+  <div class="card pins">
+    <h3>📌 ESP32 pin notes</h3>
+    <div class="pingrid">
+      <div><b>Good servo signal pins</b><br>GPIO 13, 14, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33 (any output-capable pin works with LEDC PWM).</div>
+      <div><b>Avoid for servos</b><br>GPIO 0, 2, 12, 15 (boot/strapping pins can glitch at start-up), GPIO 6–11 (flash), GPIO 34–39 (input only).</div>
+      <div><b>3.3 V signal is fine</b><br>The ESP32 outputs 3.3 V logic. Most servos accept it on the signal wire even though they run on 5 V. If one twitches, add a level shifter.</div>
+      <div><b>Timers &amp; channels</b><br>ESP32Servo uses the LEDC PWM hardware: up to 16 channels, 4 timers. Call <code>ESP32PWM::allocateTimer()</code> first.</div>
+      <div><b>MPU6050 IMU</b><br>VCC→3V3, GND→GND, SDA→GPIO21, SCL→GPIO22 (I²C). Keep it away from motors and vibration-isolate it.</div>
+      <div><b>Power</b><br>5 V BEC for servos. Power the ESP32 from the same battery via its own regulator or the BEC's VIN, never from a servo wire.</div>
+    </div>
+  </div>
+  <p class="try">🎯 <b>Try this:</b> compare all four options. Only one is right for a real drone: a <b>separate 5 V supply</b> for the servos, with <b>grounds joined</b> so the signal has a reference.</p>
+</section>
+
+
+<!-- 6 · Quad -->
+<section id="tab-quad" class="tab" hidden>
+  <h2>Quadcopters: where are the servos?</h2>
+  <p class="lead">A typical quadcopter has <b>no servos</b>. It steers by spinning its four motors at <b>different speeds</b>. Each motor is driven by an <b>ESC</b> (electronic speed controller) that reads the same kind of 50 Hz pulse a servo does, but <b>1000 µs = stop</b> and <b>2000 µs = full power</b>.</p>
+  <div class="two">
+    <div class="card">
+      <svg id="quadSvg" viewBox="0 0 420 340"></svg>
+      <div id="quadMotors" class="motorrows"></div>
+    </div>
+    <div class="card center">
+      <div class="row"><button id="quadArm" class="toggle">🔒 Disarmed: press to ARM</button></div>
+      <label class="slider">Throttle <input id="quadThr" type="range" min="0" max="1" step="0.01" value="0"><output id="quadThrOut"></output></label>
+      <label class="slider">Roll <input id="quadRoll" type="range" min="-1" max="1" step="0.05" value="0"><output id="quadRollOut"></output></label>
+      <label class="slider">Pitch <input id="quadPitch" type="range" min="-1" max="1" step="0.05" value="0"><output id="quadPitchOut"></output></label>
+      <label class="slider">Yaw <input id="quadYaw" type="range" min="-1" max="1" step="0.05" value="0"><output id="quadYawOut"></output></label>
+      <div id="quadSay" class="real"></div>
+      <table class="cmp">
+        <tr><th></th><th>Servo</th><th>ESC + motor</th></tr>
+        <tr><td>Pulse</td><td>500–2500 µs</td><td>1000–2000 µs</td></tr>
+        <tr><td>Rate</td><td>50 Hz</td><td>50 Hz (or faster)</td></tr>
+        <tr><td>Output</td><td>an <b>angle</b></td><td>a <b>speed</b> (3-phase power)</td></tr>
+        <tr><td>Power</td><td>up to ~2 A</td><td>10–40 A per motor</td></tr>
+      </table>
+    </div>
+  </div>
+  <p class="try">🎯 <b>Try this:</b> raise the throttle <i>before</i> arming: nothing happens, ESCs ignore you until armed. Arm at zero throttle, then add throttle. Now push <b>Roll</b> right: the two <i>right</i> motors slow down and the <i>left</i> ones speed up. No servos needed!</p>
+</section>
+
+<!-- 7 · More jobs -->
+<section id="tab-jobs" class="tab" hidden>
+  <h2>More jobs for servos on a drone</h2>
+  <p class="lead">Beyond flight controls, servos open doors, lift wheels and tilt motors. Each one is the same 50 Hz pulse, just a different angle for a different job.</p>
+  <div class="three">
+    <div class="card center">
+      <h3>🛬 Retractable landing gear</h3>
+      <svg id="gearSvg" viewBox="0 0 240 150"></svg>
+      <div class="row"><button id="gearBtn" class="toggle on">Gear DOWN</button></div>
+      <p class="hint" id="gearTxt"></p>
+    </div>
+    <div class="card center">
+      <h3>📦 Payload release</h3>
+      <svg id="dropSvg" viewBox="0 0 240 150"></svg>
+      <div class="row"><button id="dropBtn">Release</button><button id="dropReset" class="toggle">Reset</button></div>
+      <p class="hint" id="dropTxt"></p>
+    </div>
+    <div class="card center">
+      <h3>🛩️ Tilt-rotor (VTOL)</h3>
+      <svg id="tiltSvg" viewBox="0 0 240 150"></svg>
+      <label class="slider cols2">Tilt <input id="tiltAng" type="range" min="0" max="90" step="1" value="0"><output id="tiltOut"></output></label>
+      <p class="hint" id="tiltTxt"></p>
+    </div>
+  </div>
+  <p class="try">🎯 <b>Try this:</b> watch the servo angle in each card. Landing gear and payload latches need only <b>two</b> positions, while a tilt-rotor needs the servo to hold <b>any</b> angle in between while carrying the motor's weight and thrust.</p>
+</section>
+
+<!-- 8 · Picker -->
+<section id="tab-picker" class="tab" hidden>
+  <h2>Pick the right servo (and the right power)</h2>
+  <p class="lead">A control surface pushes back against the air. Estimate that push, then choose a servo that is strong enough, fast enough, and a BEC that can feed it.</p>
+  <div class="two">
+    <div class="card">
+      <h3>Your control surface</h3>
+      <label class="slider">Chord <input id="pkChord" type="range" min="20" max="120" step="1" value="40"><output id="pkChordOut"></output></label>
+      <label class="slider">Span <input id="pkSpan" type="range" min="80" max="500" step="5" value="300"><output id="pkSpanOut"></output></label>
+      <label class="slider">Airspeed <input id="pkV" type="range" min="5" max="40" step="1" value="18"><output id="pkVOut"></output></label>
+      <label class="slider">Max throw <input id="pkDefl" type="range" min="10" max="45" step="1" value="30"><output id="pkDeflOut"></output></label>
+      <label class="slider">Servo horn <input id="pkSh" type="range" min="8" max="25" step="1" value="12"><output id="pkShOut"></output></label>
+      <label class="slider">Control horn <input id="pkCh" type="range" min="8" max="30" step="1" value="15"><output id="pkChOut"></output></label>
+      <h3>Your parts</h3>
+      <label class="slider">Servo <select id="pkServo"></select></label>
+      <label class="slider">Servos <input id="pkN" type="range" min="1" max="8" step="1" value="4"><output id="pkNOut"></output></label>
+      <label class="slider">BEC rating <input id="pkBec" type="range" min="1" max="10" step="0.5" value="3"><output id="pkBecOut"></output></label>
+    </div>
+    <div class="card">
+      <h3>Results</h3>
+      <div id="pkResults" class="results"></div>
+      <p class="hint">Rule-of-thumb estimate for teaching. Real aircraft need testing; use datasheet values for your exact servo.</p>
+    </div>
+  </div>
+  <p class="try">🎯 <b>Try this:</b> raise airspeed to 40 m/s and widen the surface. The required torque explodes (it grows with speed <i>squared</i>!), so a micro servo flutters or stalls. Then try shortening the control horn: it trades speed for force.</p>
+</section>
+
+<!-- 9 · Quiz -->
+<section id="tab-quiz" class="tab" hidden>
+  <h2>Check what you learned</h2>
+  <div class="two">
+    <div class="card" id="quizBox"></div>
+    <div class="card"><h3>📖 Glossary</h3><dl id="gloss"></dl></div>
+  </div>
+</section>
+
+<section class="codebox">
+  <div class="ch"><h3>💻 ESP32 code for this station</h3><button id="copy">Copy</button></div>
+  <pre id="code"></pre>
+  <p class="hint">Uses the <b>ESP32Servo</b> library (Arduino IDE → Library Manager). Teaching code only: bench-test with propellers removed.</p>
+</section>
+</main>
+<footer><a href="https://wokwi.com/projects/new/esp32" target="_blank" rel="noopener">Try the code in the Wokwi simulator</a> (see the wokwi/ folder). Built for learning. Always remove props and secure the drone when testing servos for real.</footer>
+
+<script src="common.js"></script>
+<script src="pwm.js"></script>
+<script src="inside.js"></script>
+<script src="fly.js"></script>
+<script src="gimbal.js"></script>
+<script src="wiring.js"></script>
+<script src="quad.js"></script>
+<script src="jobs.js"></script>
+<script src="picker.js"></script>
+<script src="quiz.js"></script>
+<script src="tune.js"></script>
+<script src="missions.js"></script>
+<script src="predict.js"></script>
+<script src="main.js"></script>
+</body>
+</html>

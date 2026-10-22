@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "author": "servo-lab",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-esp32-devkit-v1", "id": "esp", "top": 0, "left": 0, "attrs": {} },
+    { "type": "wokwi-servo", "id": "servo1", "top": -90, "left": 190, "attrs": {} }
+  ],
+  "connections": [
+    [ "esp:TX0", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX0", "$serialMonitor:TX", "", [] ],
+    [ "servo1:GND", "esp:GND.1", "black", [ "h-30", "v140" ] ],
+    [ "servo1:V+", "esp:3V3", "red", [ "h-40", "v150" ] ],
+    [ "servo1:PWM", "esp:D13", "green", [ "h-50", "v130" ] ]
+  ],
+  "dependencies": {}
+}
